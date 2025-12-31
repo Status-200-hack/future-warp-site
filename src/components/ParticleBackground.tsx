@@ -77,40 +77,64 @@ function ParticleSphere() {
     const time = state.clock.getElapsedTime();
     
     // Smooth mouse following
-    mouseRef.current.x += (targetMouseRef.current.x - mouseRef.current.x) * 0.05;
-    mouseRef.current.y += (targetMouseRef.current.y - mouseRef.current.y) * 0.05;
+    mouseRef.current.x += (targetMouseRef.current.x - mouseRef.current.x) * 0.08;
+    mouseRef.current.y += (targetMouseRef.current.y - mouseRef.current.y) * 0.08;
     
     const mouse = mouseRef.current;
     
-    // Rotate the entire sphere
-    pointsRef.current.rotation.y = time * 0.1 + mouse.x * 0.5;
-    pointsRef.current.rotation.x = mouse.y * 0.3;
+    // Rotate the entire sphere slowly
+    pointsRef.current.rotation.y = time * 0.05;
     
-    // Animate individual particles
+    // Animate individual particles with repulsion
     const positionArray = pointsRef.current.geometry.attributes.position.array as Float32Array;
+    
+    // Convert mouse to 3D space (approximate)
+    const mouseX = mouse.x * 4;
+    const mouseY = mouse.y * 4;
+    const repulsionRadius = 2.5; // Radius of effect
+    const repulsionStrength = 1.5; // How strongly particles are pushed
     
     for (let i = 0; i < particleCount; i++) {
       const i3 = i * 3;
       
-      // Wave distortion based on time and position
       const ox = originalPositions[i3];
       const oy = originalPositions[i3 + 1];
       const oz = originalPositions[i3 + 2];
       
-      const waveX = Math.sin(time * 0.5 + oy * 0.5) * 0.1;
-      const waveY = Math.cos(time * 0.4 + ox * 0.5) * 0.1;
-      const waveZ = Math.sin(time * 0.3 + oz * 0.5) * 0.1;
+      // Wave distortion
+      const waveX = Math.sin(time * 0.5 + oy * 0.5) * 0.08;
+      const waveY = Math.cos(time * 0.4 + ox * 0.5) * 0.08;
+      const waveZ = Math.sin(time * 0.3 + oz * 0.5) * 0.08;
       
-      // Mouse influence - particles near mouse move more
-      const distToMouse = Math.sqrt(
-        Math.pow((ox / 3) - mouse.x, 2) + 
-        Math.pow((oy / 3) - mouse.y, 2)
-      );
-      const mouseInfluence = Math.max(0, 1 - distToMouse * 1.5) * 0.3;
+      // Calculate distance from mouse in 3D (project mouse onto sphere surface)
+      const dx = ox - mouseX;
+      const dy = oy - mouseY;
+      const dz = oz; // Mouse is at z=0 plane
+      const distToMouse = Math.sqrt(dx * dx + dy * dy + dz * dz * 0.3);
       
-      positionArray[i3] = ox + waveX + mouse.x * mouseInfluence;
-      positionArray[i3 + 1] = oy + waveY + mouse.y * mouseInfluence;
-      positionArray[i3 + 2] = oz + waveZ;
+      // Repulsion effect - particles move away from cursor
+      let repelX = 0;
+      let repelY = 0;
+      let repelZ = 0;
+      
+      if (distToMouse < repulsionRadius && distToMouse > 0.01) {
+        const force = (1 - distToMouse / repulsionRadius) * repulsionStrength;
+        const normalizedDist = distToMouse;
+        
+        repelX = (dx / normalizedDist) * force;
+        repelY = (dy / normalizedDist) * force;
+        repelZ = (dz / normalizedDist) * force * 0.5;
+      }
+      
+      // Apply all transformations with smooth interpolation
+      const targetX = ox + waveX + repelX;
+      const targetY = oy + waveY + repelY;
+      const targetZ = oz + waveZ + repelZ;
+      
+      // Smooth transition
+      positionArray[i3] += (targetX - positionArray[i3]) * 0.1;
+      positionArray[i3 + 1] += (targetY - positionArray[i3 + 1]) * 0.1;
+      positionArray[i3 + 2] += (targetZ - positionArray[i3 + 2]) * 0.1;
     }
     
     pointsRef.current.geometry.attributes.position.needsUpdate = true;
